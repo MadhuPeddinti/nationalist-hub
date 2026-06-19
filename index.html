@@ -16,7 +16,7 @@
     // `import { jsx } from 'react/jsx-runtime'` — that crashes when Babel injects
     // it as a plain <script> (not type="module").
     Babel.registerPreset('react-classic', {
-      presets: [['react', { runtime: 'classic' }]]
+      presets: [[Babel.availablePresets['react'], { runtime: 'classic' }]]
     });
   </script>
   <script>
