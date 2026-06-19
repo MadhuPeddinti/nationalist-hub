@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="te">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nationalist Hub | Timestamped Knowledge Archive</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Telugu:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            saffron: '#FF9933',
+            navy: '#000080',
+            paper: '#FFF9F1'
+          },
+          fontFamily: {
+            headline: ['Georgia', 'serif'],
+            sans: ['Inter', 'ui-sans-serif', 'system-ui']
+          },
+          boxShadow: {
+            glow: '0 20px 70px rgba(0, 0, 128, 0.18)'
+          }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="bg-white text-slate-900">
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="react">
+    const { useMemo } = React;
+
+    const categoryAliases = {
+      defence: 'kshaatram',
+      defense: 'kshaatram',
+      military: 'kshaatram',
+      strategic: 'kshaatram',
+      national: 'national roundup',
+      global: 'global roundup',
+      politics: 'national roundup',
+      special: 'special'
+    };
+
+    function secondsToTimestamp(seconds = 0) {
+      const safe = Number(seconds) || 0;
+      const h = Math.floor(safe / 3600);
+      const m = Math.floor((safe % 3600) / 60);
+      const s = safe % 60;
+      if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    function makeWatchUrl(video, seconds = 0) {
+      return `https://www.youtube.com/watch?v=${video.youtubeId}&t=${Number(seconds) || 0}s`;
+    }
+
+    function getTimeline(video) {
+      return Array.isArray(video.topicTimeline) ? video.topicTimeline : [];
+    }
+
+    function getSections(video) {
+      return Array.isArray(video.articleSections) ? video.articleSections : [];
+    }
+
+    function getTopicChips(video) {
+      if (Array.isArray(video.topicChips) && video.topicChips.length) return video.topicChips;
+      return getTimeline(video).slice(0, 5).map((topic) => topic.heading).filter(Boolean);
+    }
+
+    // Language helpers
+    // t(obj, 'field') returns obj.field_te if lang=te and it exists, else obj.field_en, else obj.field
+    function t(obj, field, lang) {
+      if (!obj) return '';
+      if (lang === 'te' && obj[field + '_te']) return obj[field + '_te'];
+      if (obj[field + '_en']) return obj[field + '_en'];
+      return obj[field] || '';
+    }
+    // For arrays: t_arr(obj, 'body', lang) returns body_te or body_en or body
+    function t_arr(obj, field, lang) {
+      if (!obj) return [];
+      if (lang === 'te' && Array.isArray(obj[field + '_te'])) return obj[field + '_te'];
+      if (Array.isArray(obj[field + '_en'])) return obj[field + '_en'];
+      return Array.isArray(obj[field]) ? obj[field] : [];
+    }
+    function getStoredLang() {
+      try { return localStorage.getItem('nh_lang') || 'te'; } catch { return 'te'; }
+    }
+    function setStoredLang(l) {
+      try { localStorage.setItem('nh_lang', l); } catch {}
+    }
+    function useIsXL() {
+      const [isXL, setIsXL] = React.useState(
+        typeof window !== 'undefined' ? window.matchMedia('(min-width: 1280px)').matches : false
+      );
+      React.useEffect(() => {
+        const mq = window.matchMedia('(min-width: 1280px)');
+        const handler = e => setIsXL(e.matches);
+        mq.addEventListener('change', handler);
+        return () => mq.removeEventListener('change', handler);
+      }, []);
+      return isXL;
+    }
+
+    function stringifyForSearch(value) {
+      if (value == null) return '';
+      if (typeof value === 'string' || typeof value === 'number') return String(value);
+      if (Array.isArray(value)) return value.map(stringifyForSearch).join(' ');
+      if (typeof value === 'object') return Object.values(value).map(stringifyForSearch).join(' ');
+      return '';
+    }
+
+    function Header({ query, setQuery, selectedVideo, onHome, lang, toggleLang }) {
+      return (
+        <header className="sticky top-0 z-40 bg-navy text-white shadow-md">
+          <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
+
+            {/* Logo — identical on every page */}
+            <button onClick={onHome} className="flex items-center gap-2 shrink-0 group">
+              <img src="./logo.jpg" alt="Nationalist Hub" className="h-14 w-14 rounded-full object-cover object-center" />
+              <div className="hidden sm:block leading-tight">
+                <p className="text-[9px] uppercase tracking-[0.3em] text-saffron leading-none">Dharmagnya Broadcasting</p>
+                <span className="font-headline text-base font-black text-white group-hover:text-saffron transition">Nationalist Hub</span>
+              </div>
+            </button>
+
+            {/* Back link — article view only */}
+            {selectedVideo && (
+              <>
+                <div className="h-5 w-px bg-white/20 shrink-0" />
+                <button onClick={onHome} className="shrink-0 text-sm font-bold text-white/70 hover:text-saffron transition">← Library</button>
+              </>
+            )}
+
+            {/* Search — always visible, inline */}
+            <div className="flex-1">
+              <div className="rounded-lg bg-white/10 ring-1 ring-white/20 focus-within:ring-2 focus-within:ring-saffron/60 transition-all">
+                <input
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder="Search topics, analyst, Defence..."
+                  className="w-full rounded-lg border-0 bg-transparent px-3 py-2 text-sm text-white outline-none placeholder:text-white/40"
+                />
+              </div>
+            </div>
+
+            {/* Language toggle — always visible, same style on every page */}
+            <div className="shrink-0 inline-flex rounded-lg border border-white/20 overflow-hidden">
+              {[['en','EN'],['te','తె']].map(([code, label]) => (
+                <button key={code} onClick={() => toggleLang(code)}
+                  className="px-3 py-1.5 text-xs font-black transition"
+                  style={lang === code ? {background:'#FF9933',color:'#000080',fontFamily:"'Noto Sans Telugu',sans-serif"} : {background:'transparent',color:'rgba(255,255,255,0.55)',fontFamily:"'Noto Sans Telugu',sans-serif"}}
+                >{label}</button>
+              ))}
+            </div>
+
+          </div>
+
+          {/* Search context bar — article view only, when a query is active */}
+          {selectedVideo && query && (
+            <div className="border-t border-white/10 bg-navy/95 px-4 py-2 text-center text-xs text-white/60">
+              Searching "<span className="text-saffron font-bold">{query}</span>" —{' '}
+              <button onClick={onHome} className="underline hover:text-saffron">view results in library</button>
+            </div>
+          )}
+        </header>
+      );
+    }
+    const CATEGORY_META = {
+      'Global Roundup':   { color: '#1d4ed8', label: 'Global Roundup' },
+      'National Roundup': { color: '#15803d', label: 'National Roundup' },
+      'Kshaatram':        { color: '#b91c1c', label: 'Kshaatram' },
+      'Special':          { color: '#7c3aed', label: 'Special' },
+    };
+
+    const ANALYST_INITIALS = {
+      'Mamidi Giridhar':  'MG',
+      'Suresh Kochattil': 'SK',
+    };
+
+    function readTime(video) {
+      const sections = getSections(video);
+      const words = sections.reduce((acc, s) => {
+        const body = s.body_en || s.body || [];
+        return acc + body.join(' ').split(/\s+/).length;
+      }, 0);
+      return `${Math.max(1, Math.round(words / 200))} min`;
+    }
+
+    function AnalystAvatar({ name, size = 28 }) {
+      const initials = ANALYST_INITIALS[name] || (name || '?').split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+      return (
+        <div style={{width:size,height:size,borderRadius:'50%',background:'#000080',color:'#FF9933',display:'flex',alignItems:'center',justifyContent:'center',fontSize:Math.round(size*0.36),fontWeight:900,flexShrink:0}}>
+          {initials}
+        </div>
+      );
+    }
+
+    function VideoCard({ video, onOpen, onCategory, lang = "en" }) {
+      const timeline = getTimeline(video);
+      const chips = getTopicChips(video).slice(0, 3);
+      const meta = CATEGORY_META[video.category] || { color: '#64748b', label: video.category };
+      const thumb = video.thumbnail || `https://img.youtube.com/vi/${video.youtubeId}/hqdefault.jpg`;
+      return (
+        <article
+          onClick={() => onOpen(video)}
+          className="group flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white cursor-pointer transition-all duration-150 hover:shadow-md hover:border-slate-300"
+        >
+          {/* Thumbnail 16:9 */}
+          <div className="relative overflow-hidden bg-slate-100" style={{aspectRatio:'16/9'}}>
+            <img src={thumb} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" onError={e => e.target.style.display='none'} />
+            <button
+              onClick={e => { e.stopPropagation(); onCategory(video.category); }}
+              className="absolute top-3 left-3 rounded px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white hover:opacity-90 transition"
+              style={{background: meta.color}}
+            >{meta.label}</button>
+            <span className="absolute top-3 right-3 rounded bg-black/60 px-2 py-0.5 text-[10px] font-bold text-white">{readTime(video)}</span>
+          </div>
+
+          {/* Body */}
+          <div className="flex flex-1 flex-col p-4">
+            <span className="mb-2 text-[10px] font-black uppercase tracking-widest" style={{color: meta.color}}>
+              Episode {video.episodeNumber || 'N/A'}
+            </span>
+            <h3 className="font-headline text-lg font-black leading-snug text-slate-900 line-clamp-3 group-hover:text-navy transition-colors">
+              {t(video, 'suggestedBlogTitle', lang) || video.detectedTitle}
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-slate-500 line-clamp-2">
+              {t(video, 'oneLineSummary', lang) || t(video, 'executiveSummary', lang)}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-1">
+              {chips.map(chip => (
+                <span key={chip} className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">{chip}</span>
+              ))}
+            </div>
+            <div className="mt-auto pt-3 border-t border-slate-100 flex items-center gap-2">
+              <AnalystAvatar name={video.analyst} size={24} />
+              <span className="text-xs font-semibold text-slate-600">{video.analyst}</span>
+              <span className="ml-auto text-[10px] text-slate-400">{timeline.length} topics</span>
+            </div>
+          </div>
+        </article>
+      );
+    }
+
+    function LibraryView({ videos, query, onOpen, onCategory, lang = "en", loading, error }) {
+      const cats = ['All', 'Global Roundup', 'National Roundup', 'Kshaatram', 'Special'];
+      const isCategory = cats.slice(1).some(c => c.toLowerCase() === query.trim().toLowerCase());
+      return (
+        <main className="mx-auto max-w-7xl px-4 pb-6 sm:px-6 lg:px-8">
+          <div className="sticky top-20 z-30 bg-white py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 border-b border-slate-100 mb-6 flex flex-wrap items-center gap-2">
+            {cats.map(cat => {
+              const isAll = cat === 'All';
+              const meta = CATEGORY_META[cat];
+              const active = isAll ? !isCategory : query.trim().toLowerCase() === cat.toLowerCase();
+              return (
+                <button key={cat} onClick={() => onCategory(isAll ? '' : cat)}
+                  className="rounded-full border px-3.5 py-1.5 text-xs font-bold transition-all"
+                  style={active
+                    ? {background: meta ? meta.color : '#000080', color:'#fff', borderColor: meta ? meta.color : '#000080'}
+                    : {background:'transparent', color:'#64748b', borderColor:'#e2e8f0'}}
+                >{cat}</button>
+              );
+            })}
+            <span className="ml-auto text-xs text-slate-400">
+              {loading ? 'Loading…' : `${videos.length} article${videos.length === 1 ? '' : 's'}${query ? ` · "${query}"` : ''}`}
+            </span>
+          </div>
+          {error && <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+          {!loading && videos.length > 0 ? (
+            <section className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+              {videos.map(v => <VideoCard key={v.youtubeId} video={v} onOpen={onOpen} onCategory={onCategory} lang={lang} />)}
+            </section>
+          ) : !loading ? (
+            <div className="rounded-xl border border-dashed border-slate-200 p-12 text-center">
+              <p className="font-black text-slate-400">No articles found</p>
+              <p className="mt-1 text-sm text-slate-400">Try a different category or search term</p>
+            </div>
+          ) : null}
+        </main>
+      );
+    }
+
+
+    // Converts "MM:SS" or "HH:MM:SS" string to total seconds
+    function timestampToSeconds(ts) {
+      if (!ts) return 0;
+      const parts = String(ts).split(':').map(Number);
+      if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+      if (parts.length === 2) return parts[0] * 60 + parts[1];
+      return 0;
+    }
+
+    // Renders a paragraph string, turning [MM:SS] or [H:MM:SS] patterns into
+    // styled clickable seek buttons wired to the video player
+    function InlineTimestamps({ text, seekTo }) {
+      if (!text) return null;
+      // Match patterns like [25:00] or [1:03:45]
+      const parts = text.split(/(\[\d{1,2}:\d{2}(?::\d{2})?\])/g);
+      return parts.map((part, i) => {
+        const match = part.match(/^\[(\d{1,2}:\d{2}(?::\d{2})?)\]$/);
+        if (match) {
+          const ts = match[1];
+          const secs = timestampToSeconds(ts);
+          return (
+            <button
+              key={i}
+              onClick={() => seekTo(secs)}
+              title={`Jump to ${ts} in the video`}
+              className="mx-0.5 inline-flex items-center gap-0.5 rounded px-1.5 py-0 text-[11px] font-black text-saffron ring-1 ring-saffron/30 transition hover:bg-saffron hover:text-navy cursor-pointer align-middle"
+            >
+              ▶ {ts}
+            </button>
+          );
+        }
+        return <React.Fragment key={i}>{part}</React.Fragment>;
+      });
+    }
+
+    function ArticleView({ video, onBack, videos, lang = "en", toggleLang, onCategory, onOpenVideo }) {
+      const [startTime, setStartTime] = React.useState(0);
+      const [videoOpen, setVideoOpen] = React.useState(true);
+      const [activeSection, setActiveSection] = React.useState(0);
+      const isXL = useIsXL();
+      const sections = getSections(video);
+      const timeline = getTimeline(video);
+      const takeaways = Array.isArray(video.keyStrategicTakeaways_en) ? video.keyStrategicTakeaways_en :
+                        Array.isArray(video.keyStrategicTakeaways) ? video.keyStrategicTakeaways : [];
+      const faqs = Array.isArray(video.faq) ? video.faq : [];
+      const embedUrl = `https://www.youtube-nocookie.com/embed/${video.youtubeId}?start=${startTime}&rel=0&modestbranding=1${startTime ? '&autoplay=1' : ''}`;
+
+      // Fix 4: Scroll-spy — IntersectionObserver updates activeSection as user scrolls
+      React.useEffect(() => {
+        const observers = [];
+        sections.forEach((_, i) => {
+          const el = document.getElementById(`section-${i}`);
+          if (!el) return;
+          const obs = new IntersectionObserver(
+            ([entry]) => { if (entry.isIntersecting) setActiveSection(i); },
+            { rootMargin: '-20% 0px -60% 0px' }
+          );
+          obs.observe(el);
+          observers.push(obs);
+        });
+        return () => observers.forEach(o => o.disconnect());
+      }, [sections.length]);
+
+      function seekTo(seconds) {
+        setStartTime(Number(seconds) || 0);
+        setVideoOpen(true);
+      }
+
+      function scrollToSection(index) {
+        setActiveSection(index);
+        document.getElementById(`section-${index}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      function sectionForTopic(topic) {
+        return sections.findIndex(s => Math.abs(s.startSeconds - topic.startSeconds) < 120);
+      }
+
+      return (
+        <main className="mx-auto max-w-screen-xl px-4 py-6 pb-6 sm:px-6 lg:px-8">
+
+          {/* Article header — It's FOSS style */}
+          <div className="mb-6 border-b border-slate-200 pb-7">
+            {/* Category tag + episode */}
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              {(() => { const m = CATEGORY_META[video.category] || {color:'#000080',label:video.category}; return (
+                <span className="rounded px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white" style={{background:m.color}}>{m.label}</span>
+              ); })()}
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Episode {video.episodeNumber}</span>
+            </div>
+
+            {/* Headline */}
+            <h1 className="font-headline font-black leading-tight text-slate-900" style={{fontSize:'clamp(1.6rem,3.5vw,2.6rem)',maxWidth:'52rem',fontFamily: lang === "te" ? "'Noto Sans Telugu', Georgia, serif" : "Georgia, serif"}}>
+              {t(video, 'suggestedBlogTitle', lang) || video.detectedTitle}
+            </h1>
+
+            {/* Deck / standfirst */}
+            <p className="mt-3 text-lg leading-7 text-slate-500" style={{maxWidth:'48rem'}}>{t(video, 'oneLineSummary', lang)}</p>
+
+            {/* Byline row — It's FOSS style: avatar + name + episode date + read time */}
+            <div className="mt-5 flex items-center gap-3 flex-wrap">
+              <AnalystAvatar name={video.analyst} size={36} />
+              <div>
+                <p className="text-sm font-bold text-slate-800">{video.analyst}</p>
+                <p className="text-xs text-slate-400">{readTime(video)} read</p>
+              </div>
+              <div className="ml-4 h-8 w-px bg-slate-200 hidden sm:block" />
+              {/* Mobile on-page TOC — Change 8 */}
+              <div className="ml-0 sm:ml-2 flex flex-wrap gap-1.5 lg:hidden">
+                {sections.slice(0,3).map((s,i) => (
+                  <button key={i} onClick={() => document.getElementById(`section-${i}`)?.scrollIntoView({behavior:'smooth',block:'start'})}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-semibold text-slate-500 hover:border-navy hover:text-navy transition">
+                    {t(s, 'heading', lang).split(':')[0]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Topic chips */}
+            <div className="mt-4 flex flex-wrap gap-1.5">
+              {(video.topicChips || []).map(chip => (
+                <span key={chip} className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">{chip}</span>
+              ))}
+            </div>
+          </div>
+
+          {/* 3-column layout */}
+          <div className="flex gap-6 items-start">
+
+            {/* LEFT: Article navigation only — pure scroll TOC */}
+            <aside className="hidden lg:block shrink-0 sticky top-20" style={{width:'192px'}}>
+              <p className="mb-2 px-1 text-[9px] font-black uppercase tracking-widest text-slate-400">Contents</p>
+              <nav className="space-y-0.5">
+                {sections.map((section, i) => (
+                  <button
+                    key={i}
+                    onClick={() => scrollToSection(i)}
+                    className={`w-full text-left rounded-lg px-3 py-2.5 text-xs leading-5 transition-all ${
+                      activeSection === i
+                        ? 'bg-white font-black text-navy shadow-sm ring-1 ring-slate-200 border-l-2 border-saffron'
+                        : 'font-medium text-slate-400 hover:text-slate-700'
+                    }`}
+                  >
+                    <span className="block text-[9px] font-black uppercase tracking-widest mb-0.5 text-saffron/50">{section.timestamp}</span>
+                    {section.heading}
+                  </button>
+                ))}
+              </nav>
+            </aside>
+
+            {/* CENTRE: Article body — Fix 1: give it real width, Fix 2: correct typography */}
+            <div className="min-w-0 flex-1">
+
+              {/* Executive summary — only shown here, not on card */}
+              <div className="mb-8 rounded-xl border-l-4 border-navy bg-white px-5 py-4 shadow-sm">
+                <p className="text-[10px] font-black uppercase tracking-widest text-saffron mb-2">
+                  {lang === 'te' ? 'ఎపిసోడ్ సారాంశం' : 'Episode Brief'}
+                </p>
+                <p className="text-sm leading-7 text-slate-600">{t(video, 'executiveSummary', lang)}</p>
+                {(video.audienceValue_en || video.audienceValue) && (
+                  <p className="mt-3 text-xs font-semibold text-navy border-t border-slate-100 pt-3">◆ {t(video, 'audienceValue', lang)}</p>
+                )}
+              </div>
+
+              {sections.length > 0 ? (
+                <div className="space-y-14">
+                  {sections.map((section, index) => (
+                    <article key={index} id={`section-${index}`} className="scroll-mt-20">
+
+                      {/* Fix 6: Section number + heading + watch CTA */}
+                      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-saffron/70">{section.timestamp}</span>
+                            <span className="h-px flex-1 bg-saffron/20" />
+                          </div>
+                          <h2 className="font-headline text-2xl font-black text-navy leading-snug md:text-3xl" style={{fontFamily: lang === "te" ? "'Noto Sans Telugu', Georgia, serif" : "Georgia, serif"}}>
+                            {t(section, 'heading', lang)}
+                          </h2>
+                          {(section.subheading_en || section.subheading) && <p className="mt-1 text-sm font-semibold text-slate-400">{t(section, 'subheading', lang)}</p>}
+                        </div>
+                        <button
+                          onClick={() => seekTo(section.startSeconds)}
+                          className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-saffron px-3 py-1.5 text-xs font-black text-navy transition hover:bg-navy hover:text-white"
+                        >
+                          ▶ {section.timestamp}
+                        </button>
+                      </div>
+
+                      {/* Fix 2: Body text — 16px, 1.75 line-height, max 68ch */}
+                      <div className="space-y-5" style={{fontSize:'16px', lineHeight: lang === 'te' ? '2' : '1.8', color:'#374151', maxWidth:'68ch', fontFamily: lang === 'te' ? "'Noto Sans Telugu', sans-serif" : 'inherit'}}>
+                        {t_arr(section, 'body', lang).map((para, bi) => (
+                          <p key={bi}><InlineTimestamps text={para} seekTo={seekTo} /></p>
+                        ))}
+                      </div>
+
+                      {/* Pull quote */}
+                      {Array.isArray(section.notableQuotesOrParaphrases) && section.notableQuotesOrParaphrases.map((q, qi) => {
+                        const ts = q.timestamp ? timestampToSeconds(q.timestamp) : section.startSeconds;
+                        return (
+                          <blockquote key={qi} className="my-7 border-l-4 border-saffron pl-5" style={{maxWidth:'58ch'}}>
+                            <p className="font-headline text-lg font-black italic leading-8 text-navy" style={{fontFamily: lang === "te" ? "'Noto Sans Telugu', Georgia, serif" : "Georgia, serif"}}>"{lang === 'te' && q.text_te ? q.text_te : (q.text_en || q.text)}"</p>
+                            <button onClick={() => seekTo(ts)} className="mt-2 inline-flex items-center gap-1.5 text-xs font-black text-saffron hover:text-navy transition">
+                              ▶ {q.timestamp} · {q.type === 'quote' ? (lang === 'te' ? 'నేరుగా చెప్పారు' : 'Direct quote') : (lang === 'te' ? 'సారాంశం' : 'Paraphrase')}
+                            </button>
+                          </blockquote>
+                        );
+                      })}
+
+                      {/* Key points — Fix key issue: same size as body */}
+                      {Array.isArray(section.keyPoints) && section.keyPoints.length > 0 && (
+                        <div className="mt-6 rounded-xl bg-paper p-4 ring-1 ring-saffron/15" style={{maxWidth:'68ch'}}>
+                          <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-saffron">Key Points</p>
+                          <ul className="space-y-2">
+                            {t_arr(section, 'keyPoints', lang).map((pt, pi) => (
+                              <li key={pi} className="flex gap-2.5 text-sm leading-6 text-slate-700">
+                                <span className="text-saffron shrink-0 mt-0.5">◆</span>{pt}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Tags */}
+                      {Array.isArray(section.tags) && section.tags.length > 0 && (
+                        <div className="mt-4 flex flex-wrap gap-1.5">
+                          {section.tags.map(tag => (
+                            <span key={tag} className="rounded-md bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold text-slate-500">#{tag}</span>
+                          ))}
+                        </div>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-slate-400">
+                  <p className="font-bold text-sm">No article sections yet.</p>
+                </div>
+              )}
+
+              {/* Takeaways — Fix: use bordered callout not full dark block */}
+              {takeaways.length > 0 && (
+                <section className="mt-12 rounded-xl border border-navy/20 bg-white p-5 shadow-sm" style={{maxWidth:'68ch'}}>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-saffron mb-4">Key Strategic Takeaways</p>
+                  <ul className="space-y-3">
+                    {(lang === 'te' && Array.isArray(video.keyStrategicTakeaways_te) ? video.keyStrategicTakeaways_te : (Array.isArray(video.keyStrategicTakeaways_en) ? video.keyStrategicTakeaways_en : takeaways)).map((item, i) => (
+                      <li key={i} className="flex gap-3 text-sm leading-7 text-slate-700 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
+                        <span className="text-saffron shrink-0 mt-0.5 font-black">{i + 1}.</span>{item}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {/* FAQ */}
+              {faqs.length > 0 && (
+                <section className="mt-8" style={{maxWidth:'68ch'}}>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-saffron mb-3">Frequently Asked</p>
+                  <div className="space-y-2">
+                    {faqs.map((item, i) => (
+                      <details key={i} className="group rounded-xl border border-slate-200 bg-white overflow-hidden">
+                        <summary className="cursor-pointer list-none flex items-center justify-between gap-3 px-4 py-3 font-black text-sm text-navy hover:bg-slate-50 transition">
+                          {lang === 'te' && item.question_te ? item.question_te : (item.question_en || item.question)}
+                          <span className="shrink-0 text-saffron text-base leading-none transition-transform group-open:rotate-45">+</span>
+                        </summary>
+                        <p className="px-4 pb-4 pt-2 text-sm leading-7 text-slate-600 border-t border-slate-100">
+                          {lang === 'te' && item.answer_te ? item.answer_te : (item.answer_en || item.answer)}
+                        </p>
+                      </details>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
+
+            {/* RIGHT: Video player + topic seek list with gists */}
+            <aside className="hidden xl:block shrink-0 sticky top-20" style={{width:'272px'}} id="video-panel">
+
+              {/* Video player */}
+              <div className="rounded-xl overflow-hidden ring-1 ring-slate-200 bg-white mb-3">
+                <button
+                  onClick={() => setVideoOpen(v => !v)}
+                  className="w-full flex items-center justify-between bg-navy px-3 py-2.5 hover:bg-navy/90 transition"
+                >
+                  <span className="text-[10px] font-black uppercase tracking-widest text-saffron">
+                    {videoOpen ? '▼ Hide video' : '▶ Watch video'}
+                  </span>
+                  {videoOpen && <span className="text-[10px] text-white/50">{secondsToTimestamp(startTime)}</span>}
+                </button>
+
+                {videoOpen && isXL && (
+                  <div>
+                    <div className="aspect-video w-full bg-black">
+                      <iframe key={embedUrl} className="h-full w-full" src={embedUrl}
+                        title={video.detectedTitle} loading="lazy"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen />
+                    </div>
+                    <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
+                      <span className="text-[10px] text-slate-400">at <span className="font-black text-navy">{secondsToTimestamp(startTime)}</span></span>
+                      <a href={makeWatchUrl(video, startTime)} target="_blank" rel="noreferrer"
+                        className="text-[10px] font-bold text-saffron hover:underline">YouTube ↗</a>
+                    </div>
+                  </div>
+                )}
+
+                {!videoOpen && (
+                  <p className="px-3 py-2.5 text-[10px] text-slate-400 leading-5">
+                    Click any <span className="font-black text-navy">▶ timestamp</span> in the article to jump here.
+                  </p>
+                )}
+              </div>
+
+              {/* Topic seek list — with gists, this is the VIDEO index not the article TOC */}
+              <div className="rounded-xl ring-1 ring-slate-200 bg-white overflow-hidden">
+                <div className="px-3 py-2.5 border-b border-slate-100">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Topics in this episode</p>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {timeline.map((topic, i) => {
+                    const hasArticle = sectionForTopic(topic) !== -1;
+                    return (
+                      <button key={i} onClick={() => seekTo(topic.startSeconds)}
+                        className="w-full text-left px-3 py-3 hover:bg-saffron/5 transition group">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="shrink-0 rounded bg-navy/8 px-1.5 py-0.5 text-[9px] font-black text-navy group-hover:bg-saffron group-hover:text-navy transition">
+                            ▶ {secondsToTimestamp(topic.startSeconds)}
+                          </span>
+                          {hasArticle && (
+                            <span className="text-[9px] font-black uppercase tracking-widest text-saffron/60">article ↑</span>
+                          )}
+                        </div>
+                        <p className="text-[11px] font-black text-slate-700 leading-4 mb-1">{t(topic, 'heading', lang)}</p>
+                        {(topic.gist_en || topic.gist) && (
+                          <p className="text-[10px] text-slate-400 leading-4">{t(topic, 'gist', lang)}</p>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+            </aside>
+
+          </div>
+
+          {/* Change 4: Share buttons — It's FOSS style */}
+          <div className="mt-10 border-t border-slate-200 pt-6" style={{maxWidth:'68ch'}}>
+            <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Share this article</p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { label: 'X (Twitter)', color: '#000', url: `https://twitter.com/intent/tweet?text=${encodeURIComponent(t(video,'suggestedBlogTitle',lang))}&url=${encodeURIComponent(video.sourceUrl)}` },
+                { label: 'WhatsApp',    color: '#25D366', url: `https://wa.me/?text=${encodeURIComponent(t(video,'suggestedBlogTitle',lang) + ' ' + video.sourceUrl)}` },
+                { label: 'LinkedIn',    color: '#0a66c2', url: `https://www.linkedin.com/shareArticle?mini=true&url=${encodeURIComponent(video.sourceUrl)}&title=${encodeURIComponent(t(video,'suggestedBlogTitle',lang))}` },
+                { label: 'Copy link',   color: '#64748b', url: null },
+              ].map(({ label, color, url }) => (
+                <a key={label}
+                  href={url || '#'}
+                  onClick={url ? undefined : e => { e.preventDefault(); navigator.clipboard?.writeText(video.sourceUrl); }}
+                  target={url ? '_blank' : undefined}
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold text-white transition hover:opacity-90"
+                  style={{background: color, borderColor: color}}
+                >{label}</a>
+              ))}
+            </div>
+          </div>
+
+          {/* Change 5: More from this series */}
+          {(() => {
+            const related = videos.filter(v => v.youtubeId !== video.youtubeId && v.category === video.category).slice(0,2);
+            if (!related.length) return null;
+            return (
+              <div className="mt-10 border-t border-slate-200 pt-6">
+                <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">More from {video.category}</p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {related.map(v => (
+                    <button key={v.youtubeId} onClick={() => onOpenVideo(v)}
+                      className="group flex gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left hover:border-slate-300 hover:shadow-sm transition">
+                      <img src={v.thumbnail || `https://img.youtube.com/vi/${v.youtubeId}/mqdefault.jpg`} alt=""
+                        className="w-24 h-16 object-cover rounded-lg flex-shrink-0 bg-slate-100" onError={e => e.target.style.display='none'} />
+                      <div className="min-w-0">
+                        <p className="text-xs font-black text-slate-900 line-clamp-2 group-hover:text-navy transition">{t(v, 'suggestedBlogTitle', lang) || v.detectedTitle}</p>
+                        <p className="mt-1 text-[10px] text-slate-400">{v.analyst} · {readTime(v)}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Mobile: floating video bar */}
+          <div className="fixed bottom-0 left-0 right-0 z-50 xl:hidden border-t-2 border-saffron bg-navy text-white shadow-2xl">
+            <button onClick={() => setVideoOpen(v => !v)} className="w-full flex items-center justify-between px-5 py-3">
+              <span className="text-xs font-black uppercase tracking-widest text-saffron">
+                {videoOpen ? '▼ Hide Video' : '▶ Show Video Reference'}
+              </span>
+              <span className="text-xs text-white/50">{secondsToTimestamp(startTime)}</span>
+            </button>
+            {videoOpen && !isXL && (
+              <div className="aspect-video w-full bg-black">
+                <iframe key={embedUrl} className="h-full w-full" src={embedUrl}
+                  title={video.detectedTitle} loading="lazy"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen />
+              </div>
+            )}
+          </div>
+
+        </main>
+      );
+    }
+
+    const SUB_CHANNELS = [
+      { label: 'NHTV',           href: 'https://www.youtube.com/@NHTVOfficial' },
+      { label: 'NHX (English)',  href: 'https://www.youtube.com/@NHXEnglish' },
+      { label: 'NH Bhakti',      href: 'https://www.youtube.com/@NHBhakti' },
+      { label: 'NH Entertainment', href: 'https://www.youtube.com/@NHEntertainment' },
+    ];
+
+    function SovereignFooter() {
+      return (
+        <footer className="border-t-4 border-saffron bg-navy text-white">
+          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+            <div className="grid gap-6 sm:grid-cols-3">
+
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-saffron mb-2">Support</p>
+                <p className="text-xs font-semibold text-white/70 leading-5">Dharmagnya Broadcasting Pvt Ltd</p>
+                <p className="text-xs text-white/45 leading-5">HDFC A/C: 50200075206712</p>
+                <p className="text-xs text-white/45 leading-5">IFSC: HDFC0008045</p>
+              </div>
+
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-saffron mb-2">Sponsors</p>
+                <div className="flex gap-2 flex-wrap">
+                  <a href="https://ayurway.com" target="_blank" rel="noreferrer"
+                    className="rounded-full border border-white/20 px-3 py-1 text-xs font-black text-white transition hover:border-saffron hover:text-saffron">Ayurway</a>
+                  <a href="https://ojaska.com" target="_blank" rel="noreferrer"
+                    className="rounded-full border border-white/20 px-3 py-1 text-xs font-black text-white transition hover:border-saffron hover:text-saffron">Ojaska</a>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-saffron mb-2">Sub-Channels</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {SUB_CHANNELS.map(({ label, href }) => (
+                    <a key={label} href={href} target="_blank" rel="noreferrer"
+                      className="rounded-lg border border-white/15 px-2.5 py-1.5 text-[11px] font-bold text-white/75 text-center transition hover:border-saffron hover:text-saffron">
+                      {label}
+                    </a>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+            <div className="mt-5 border-t border-white/10 pt-4 flex items-center justify-between gap-4">
+              <p className="text-[10px] text-white/35">© {new Date().getFullYear()} Dharmagnya Broadcasting Pvt Ltd. All rights reserved.</p>
+              <p className="text-[10px] text-white/25 hidden sm:block shrink-0">First Nationalistic Media Platform in Telugu</p>
+            </div>
+          </div>
+        </footer>
+      );
+    }
+
+
+    function App() {
+      const [query, setQuery] = React.useState('');
+      const [selectedVideo, setSelectedVideo] = React.useState(null);
+      const [videos, setVideos] = React.useState([]);
+      const [loading, setLoading] = React.useState(true);
+      const [error, setError] = React.useState('');
+      const [lang, setLang] = React.useState(getStoredLang());
+
+      function toggleLang(l) { setLang(l); setStoredLang(l); }
+
+      React.useEffect(() => {
+        fetch('./data.json')
+          .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+          .then(d => { setVideos(Array.isArray(d.videos) ? d.videos : []); setLoading(false); })
+          .catch(e => { setError('Could not load data.json — ' + e.message); setLoading(false); });
+      }, []);
+
+      const filteredVideos = React.useMemo(() => {
+        const normalizedQuery = query.trim().toLowerCase();
+        if (!normalizedQuery) return videos;
+        const alias = categoryAliases[normalizedQuery];
+        return videos.filter((video) => {
+          const searchable = stringifyForSearch(video).toLowerCase();
+          return searchable.includes(normalizedQuery) || (alias && searchable.includes(alias));
+        });
+      }, [query, videos]);
+
+      function goHome() {
+        setSelectedVideo(null);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      function openVideo(video) {
+        setSelectedVideo(video);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      return (
+        <div className="min-h-screen">
+          <Header query={query} setQuery={setQuery} selectedVideo={selectedVideo} onHome={goHome} lang={lang} toggleLang={toggleLang} />
+          {selectedVideo
+            ? <ArticleView video={selectedVideo} onBack={goHome} videos={videos} lang={lang} toggleLang={toggleLang} onOpenVideo={openVideo} onCategory={cat => { goHome(); setTimeout(() => setQuery(cat), 50); }} />
+            : <LibraryView videos={filteredVideos} query={query} onOpen={openVideo} onCategory={cat => setQuery(cat)} lang={lang} loading={loading} error={error} />}
+          {selectedVideo && <div className="xl:hidden h-20" />}
+          <SovereignFooter />
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
