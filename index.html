@@ -9,7 +9,16 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.23.0/babel.min.js"></script>
+  <script>
+    // Force classic JSX runtime so the transformed code never emits `import` statements.
+    // Newer @babel/preset-react defaults to "automatic" runtime which generates
+    // `import { jsx } from 'react/jsx-runtime'` — that crashes when Babel injects
+    // it as a plain <script> (not type="module").
+    Babel.registerPreset('react-classic', {
+      presets: [['react', { runtime: 'classic' }]]
+    });
+  </script>
   <script>
     tailwind.config = {
       theme: {
@@ -34,7 +43,7 @@
 <body class="bg-white text-slate-900">
   <div id="root"></div>
 
-  <script type="text/babel" data-presets="react">
+  <script type="text/babel" data-presets="react-classic">
     const { useMemo } = React;
 
     const categoryAliases = {
